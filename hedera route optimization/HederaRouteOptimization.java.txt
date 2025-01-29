@@ -1,0 +1,65 @@
+import java.util.*;
+import com.hedera.hashgraph.sdk.*;
+
+public class HederaRouteOptimization {
+    
+    public static double calculateDistance(int[] point1, int[] point2) {
+        return Math.sqrt(Math.pow(point1[0] - point2[0], 2) + Math.pow(point1[1] - point2[1], 2));
+    }
+
+    public static List<int[]> optimizeRoute(List<int[]> locations) {
+        List<int[]> visited = new ArrayList<>();
+        visited.add(locations.get(0));
+        List<int[]> unvisited = new ArrayList<>(locations.subList(1, locations.size())); 
+        double totalDistance = 0;
+
+        while (!unvisited.isEmpty()) {
+            int[] currentLocation = visited.get(visited.size() - 1);
+            int[] nearestLocation = unvisited.stream()
+                .min(Comparator.comparingDouble(loc -> calculateDistance(currentLocation, loc)))
+                .orElseThrow();
+            
+            totalDistance += calculateDistance(currentLocation, nearestLocation);
+            visited.add(nearestLocation);
+            unvisited.remove(nearestLocation);
+        }
+
+        totalDistance += calculateDistance(visited.get(visited.size() - 1), visited.get(0));
+        visited.add(visited.get(0));
+        
+        System.out.println("Total Distance: " + totalDistance);
+        return visited;
+    }
+
+    public static void storeRouteOnHedera(String routeData) throws Exception {
+        Client client = Client.forTestnet();
+        client.setOperator(AccountId.fromString("Your-Hedera-Account-ID"), PrivateKey.fromString("Your-Private-Key"));
+
+        TopicCreateTransaction transaction = new TopicCreateTransaction().execute(client);
+        TransactionReceipt receipt = transaction.getReceipt(client);
+        TopicId topicId = receipt.topicId;
+
+        new TopicMessageSubmitTransaction()
+            .setTopicId(topicId)
+            .setMessage(routeData)
+            .execute(client);
+        
+        System.out.println("Optimized route stored on Hedera: " + topicId);
+    }
+
+    public static void main(String[] args) throws Exception {
+        List<int[]> locations = Arrays.asList(
+            new int[]{0, 0}, new int[]{2, 3}, new int[]{5, 1}, 
+            new int[]{6, 4}, new int[]{1, 6}
+        );
+
+        List<int[]> optimizedRoute = optimizeRoute(locations);
+
+        StringBuilder routeString = new StringBuilder();
+        for (int[] point : optimizedRoute) {
+            routeString.append(Arrays.toString(point)).append(" -> ");
+        }
+        
+        storeRouteOnHedera(routeString.toString());
+    }
+}
